@@ -8,6 +8,8 @@ import numpy as np
 import scipy as sp
 from progressbar import ProgressBar
 from scipy import stats  # noqa: F401
+from sklearn.base import BaseEstimator, RegressorMixin, _fit_context
+from sklearn.utils.validation import check_is_fitted
 
 from pygam.callbacks import (
     CALLBACKS,  # noqa: F401
@@ -88,7 +90,7 @@ from pygam.utils import (
 EPS = np.finfo(np.float64).eps  # machine epsilon
 
 
-class GAM(Core, MetaTermMixin):
+class GAM(Core, MetaTermMixin, RegressorMixin, BaseEstimator):
     """Generalized Additive Model.
 
     Parameters
@@ -464,6 +466,7 @@ class GAM(Core, MetaTermMixin):
         y : np.array of shape (n_samples, )
             containing predicted values under the model
         """
+        check_is_fitted(self)
         return self.predict_mu(X)
 
     def _modelmat(self, X, term=-1):
@@ -857,6 +860,7 @@ class GAM(Core, MetaTermMixin):
             if hasattr(callback, "on_loop_end"):
                 self.logs_[str(callback)].append(callback.on_loop_end(**variables))
 
+    @_fit_context(prefer_skip_nested_validation=True)
     def fit(self, X, y, weights=None):
         """Fit the generalized additive model.
 
@@ -896,6 +900,7 @@ class GAM(Core, MetaTermMixin):
 
         # validate data-dependent parameters
         self._validate_data_dep_params(X)
+        self.is_fitted_ = True
 
         # set up logging
         if not hasattr(self, "logs_"):

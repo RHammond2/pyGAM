@@ -1,4 +1,5 @@
 import pytest
+from sklearn.utils.estimator_checks import check_estimator
 
 from pygam import (
     GAM,
@@ -9,6 +10,13 @@ from pygam import (
     LogisticGAM,
     PoissonGAM,
 )
+
+
+def test_sklearn_compatibility():
+    """
+    check that the scikit-learn integration is valid
+    """
+    check_estimator(GAM())
 
 
 def test_can_build_sub_models():
