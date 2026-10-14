@@ -8,7 +8,7 @@ import numpy as np
 import scipy as sp
 from progressbar import ProgressBar
 from scipy import stats  # noqa: F401
-from sklearn.base import BaseEstimator, RegressorMixin, _fit_context
+from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, _fit_context
 from sklearn.utils.validation import check_is_fitted
 
 from pygam.callbacks import (
@@ -90,7 +90,7 @@ from pygam.utils import (
 EPS = np.finfo(np.float64).eps  # machine epsilon
 
 
-class GAM(Core, MetaTermMixin, RegressorMixin, BaseEstimator):
+class GAM(Core, MetaTermMixin, BaseEstimator):
     """Generalized Additive Model.
 
     Parameters
@@ -2373,7 +2373,7 @@ class GAM(Core, MetaTermMixin, RegressorMixin, BaseEstimator):
         return coef_draws
 
 
-class LinearGAM(GAM):
+class LinearGAM(RegressorMixin, GAM):
     """Linear GAM.
 
     This is a GAM with a Normal error distribution, and an identity link.
@@ -2511,7 +2511,7 @@ class LinearGAM(GAM):
         return self._get_quantiles(X, width, quantiles, prediction=True)
 
 
-class LogisticGAM(GAM):
+class LogisticGAM(ClassifierMixin, GAM):
     """Logistic GAM.
 
     This is a GAM with a Binomial error distribution, and a logit link.
@@ -2687,7 +2687,7 @@ class LogisticGAM(GAM):
         return self.predict_mu(X)
 
 
-class PoissonGAM(GAM):
+class PoissonGAM(RegressorMixin, GAM):
     """Poisson GAM.
 
     This is a GAM with a Poisson error distribution, and a log link.
@@ -3051,7 +3051,7 @@ class PoissonGAM(GAM):
         )
 
 
-class GammaGAM(GAM):
+class GammaGAM(RegressorMixin, GAM):
     """Gamma GAM.
 
     This is a GAM with a Gamma error distribution, and a log link.
@@ -3170,7 +3170,7 @@ class GammaGAM(GAM):
         super(GammaGAM, self)._validate_params()
 
 
-class InvGaussGAM(GAM):
+class InvGaussGAM(RegressorMixin, GAM):
     """Inverse Gaussian GAM.
 
     This is a GAM with an Inverse Gaussian error distribution, and a log link.
@@ -3289,7 +3289,7 @@ class InvGaussGAM(GAM):
         super(InvGaussGAM, self)._validate_params()
 
 
-class ExpectileGAM(GAM):
+class ExpectileGAM(RegressorMixin, GAM):
     """Expectile GAM.
 
     This is a GAM with a Normal distribution and an Identity Link,
