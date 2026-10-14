@@ -436,8 +436,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         y : np.array of shape (n_samples, )
             containing expected values under the model
         """
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
+        check_is_fitted(self)
 
         X = check_X(
             X,
@@ -965,8 +964,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         deviance_residuals : np.array
             with shape (n_samples, )
         """
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
+        check_is_fitted(self)
 
         y = check_y(y, self.link, self.distribution, verbose=self.verbose)
         X = check_X(
@@ -1234,8 +1232,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
 
     def _estimate_p_values(self):
         """Estimate the p-values for all features."""
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
+        check_is_fitted(self)
 
         p_values = []
         for term_i in range(len(self.terms)):
@@ -1274,8 +1271,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
 
         the errata show a correction for the f-statistic.
         """
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
+        check_is_fitted(self)
 
         idxs = self.terms.get_coef_indices(term_i)
         cov = self.statistics_["cov"][idxs][:, idxs]
@@ -1323,8 +1319,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             deal with non-Gaussian distributions, and treat the smoothing parameters as
             fixed, when in reality they are estimated from the data.
         """
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
+        check_is_fitted(self)
 
         X = check_X(
             X,
@@ -1480,8 +1475,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             If the term requested is an intercept
             since it does not make sense to process the intercept term.
         """
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
+        check_is_fitted(self)
 
         # cant do Intercept
         if self.terms[term].isintercept:
@@ -1580,8 +1574,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         --------
         generate_X_grid : for help creating meshgrids.
         """
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
+        check_is_fitted(self)
 
         if not isinstance(term, int):
             raise ValueError(f"term must be an integer, but found term: {term}")
@@ -1654,8 +1647,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         -------
         None
         """
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
+        check_is_fitted(self)
 
         # high-level model summary
         width_details = 47
@@ -2273,8 +2265,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         | Generalized Additive Models: an introduction with R
         | Section 4.9.3 (pages 198–199) and Section 5.4.2 (page 256–257).
         """
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
+        check_is_fitted(self)
         if n_bootstraps < 1:
             raise ValueError(f"n_bootstraps must be >= 1; got {n_bootstraps}")
         if n_draws < 1:
@@ -2496,8 +2487,7 @@ class LinearGAM(RegressorMixin, GAM):
         -------
         intervals: np.array of shape (n_samples, 2 or len(quantiles))
         """
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
+        check_is_fitted(self)
 
         X = check_X(
             X,
@@ -2618,8 +2608,7 @@ class LogisticGAM(ClassifierMixin, GAM):
         -------
         float in [0, 1]
         """
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
+        check_is_fitted(self)
 
         y = check_y(y, self.link, self.distribution, verbose=self.verbose)
         if X is not None:
@@ -2668,6 +2657,7 @@ class LogisticGAM(ClassifierMixin, GAM):
         y : np.array of shape (n_samples, )
             containing binary targets under the model
         """
+        check_is_fitted(self)
         return self.predict_mu(X) > 0.5
 
     def predict_proba(self, X):
@@ -2684,6 +2674,7 @@ class LogisticGAM(ClassifierMixin, GAM):
         y : np.array of shape (n_samples, )
             containing expected values under the model
         """
+        check_is_fitted(self)
         return self.predict_mu(X)
 
 
@@ -2894,6 +2885,7 @@ class PoissonGAM(RegressorMixin, GAM):
 
         return y, weights
 
+    @_fit_context(prefer_skip_nested_validation=True)
     def fit(self, X, y, exposure=None, weights=None):
         """Fit the generalized additive model.
 
@@ -2922,6 +2914,7 @@ class PoissonGAM(RegressorMixin, GAM):
             Returns fitted GAM object
         """
         y, weights = self._exposure_to_weights(y, exposure, weights)
+        self.is_fitted_ = True
         return super(PoissonGAM, self).fit(X, y, weights)
 
     def predict(self, X, exposure=None):
@@ -2943,9 +2936,7 @@ class PoissonGAM(RegressorMixin, GAM):
         y : np.array of shape (n_samples, )
             containing predicted values under the model
         """
-        if not self._is_fitted:
-            raise AttributeError("GAM has not been fitted. Call fit first.")
-
+        check_is_fitted(self)
         X = check_X(
             X,
             n_feats=self.statistics_["m_features"],
