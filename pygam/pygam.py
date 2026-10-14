@@ -3,14 +3,12 @@
 import warnings
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
-from numbers import Real
 
 import numpy as np
 import scipy as sp
 from progressbar import ProgressBar
 from scipy import stats  # noqa: F401
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, _fit_context
-from sklearn.utils._param_validation import Interval, StrOptions
 from sklearn.utils.validation import check_is_fitted
 
 from pygam.callbacks import (
@@ -160,17 +158,6 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
     | Twenty years of P-splines
     | https://e-archivo.uc3m.es/rest/api/core/bitstreams/4e23bd9f-c90d-4598-893e-deb0a6bf0728/content
     """
-
-    _parameter_constraints = {
-        "terms": [StrOptions({"auto"}), TermList, Term],
-        "max_iter": [Interval(Real, 0, None, closed="neither")],
-        "tol": [Interval(Real, 0, None, closed="neither")],
-        "distribution": [StrOptions(set(DISTRIBUTIONS)), Distribution],
-        "link": [StrOptions(set(LINKS)), Link],
-        "callback": [StrOptions(set(CALLBACKS)), CallBack],
-        "fit_intercept": ["boolean"],
-        "verbose": ["boolean"],
-    }
 
     def __init__(
         self,
