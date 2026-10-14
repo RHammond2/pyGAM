@@ -43,7 +43,7 @@ class TestPartialDepencence:
         """
         # specify X
         X, y = chicago_X_y
-        for i, term in enumerate(chicago_gam.terms):
+        for i, term in enumerate(chicago_gam._terms):
             if term.isintercept:
                 continue
 
@@ -75,7 +75,7 @@ class TestPartialDepencence:
         """
         # specify X
         X, y = chicago_X_y
-        for i, term in enumerate(chicago_gam.terms):
+        for i, term in enumerate(chicago_gam._terms):
             if term.isintercept:
                 continue
 
@@ -111,7 +111,7 @@ class TestPartialDepencence:
         for non-tensor terms, the outputs of `partial_dependence` is the same
         regardless of `meshgrid=True/False`
         """
-        assert not chicago_gam.terms[0].istensor
+        assert not chicago_gam._terms[0].istensor
         meshTrue = chicago_gam.partial_dependence(term=0, meshgrid=True)
         meshFalse = chicago_gam.partial_dependence(term=0, meshgrid=False)
 
@@ -123,7 +123,7 @@ class TestPartialDepencence:
         """
         for tensor terms the value of `meshgrid` matters
         """
-        assert chicago_gam.terms[1].istensor
+        assert chicago_gam._terms[1].istensor
         meshTrue = chicago_gam.partial_dependence(term=1, meshgrid=True)
         meshFalse = chicago_gam.partial_dependence(term=1, meshgrid=False)
 

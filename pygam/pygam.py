@@ -178,6 +178,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         self.callbacks = callbacks
         self.verbose = verbose
         self.terms = TermList(terms) if isinstance(terms, Term) else terms
+        self._terms = TermList(terms) if isinstance(terms, Term) else terms
         self.fit_intercept = fit_intercept
 
         for k, v in kwargs.items():
@@ -190,7 +191,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         self._constraint_l2 = 1e-3  # diagonal loading to improve conditioning
         self._constraint_l2_max = 1e-1  # maximum loading
         # self._opt = 0 # use 0 for numerically stable optimizer, 1 for naive
-        self._term_location = "terms"  # for locating sub terms
+        self._term_location = "_terms"  # for locating sub terms
         # self._include = ['lam']
 
         # call super and exclude any variables
@@ -199,14 +200,14 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
     # @property
     # def lam(self):
     #     if self._has_terms():
-    #         return self.terms.lam
+    #         return self._terms.lam
     #     else:
     #         return self._lam
     #
     # @lam.setter
     # def lam(self, value):
     #     if self._has_terms():
-    #         self.terms.lam = value
+    #         self._terms.lam = value
     #     else:
     #         self._lam = value
 
@@ -302,35 +303,35 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         # terms
         if self.terms == "auto":
             # one numerical spline per feature
-            self.terms = TermList(
+            self._terms = TermList(
                 *[SplineTerm(feat, verbose=self.verbose) for feat in range(m_features)]
             )
 
         elif self.terms is None:
             # no terms
-            self.terms = TermList()
+            self._terms = TermList()
 
         else:
             # user-specified
-            self.terms = TermList(self.terms, verbose=self.verbose)
+            self._terms = TermList(self._terms, verbose=self.verbose)
 
         # add intercept
         if self.fit_intercept:
-            self.terms = self.terms + Intercept()
+            self._terms = self._terms + Intercept()
 
-        if len(self.terms) == 0:
+        if len(self._terms) == 0:
             raise ValueError("At least 1 term must be specified")
 
         # copy over things from plural
         remove = []
         for k, v in self.__dict__.items():
             if k in self._plural:
-                setattr(self.terms, k, v)
+                setattr(self._terms, k, v)
                 remove.append(k)
         for k in remove:
             delattr(self, k)
 
-        self.terms.compile(X)
+        self._terms.compile(X)
 
     def loglikelihood(self, X, y, weights=None):
         """
@@ -419,7 +420,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         if modelmat is None:
             modelmat = self._modelmat(X, term=term)
         if b is None:
-            b = self.coef_[self.terms.get_coef_indices(term)]
+            b = self.coef_[self._terms.get_coef_indices(term)]
         return modelmat.dot(b).flatten()
 
     def predict_mu(self, X):
@@ -497,7 +498,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             verbose=self.verbose,
         )
 
-        return self.terms.build_columns(X, term=term)
+        return self._terms.build_columns(X, term=term)
 
     def _cholesky(self, A, **kwargs):
         """
@@ -559,7 +560,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         P : sparse CSC matrix containing the model penalties in quadratic form
 
         """
-        return self.terms.build_penalties()
+        return self._terms.build_penalties()
 
     def _C(self):
         """
@@ -576,7 +577,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         -------
         C : sparse CSC matrix containing the model constraints in quadratic form
         """
-        return self.terms.build_constraints(
+        return self._terms.build_constraints(
             self.coef_, self._constraint_lam, self._constraint_l2
         )
 
@@ -738,7 +739,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         # initialize GLM coefficients if model is not yet fitted
         if (
             not self._is_fitted
-            or len(self.coef_) != self.terms.n_coefs
+            or len(self.coef_) != self._terms.n_coefs
             or not np.isfinite(self.coef_).all()
         ):
             # initialize the model
@@ -753,12 +754,12 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         # S += self._H # add any user-chosen minimum penalty to the diagonal
 
         # if we don't have any constraints, then do cholesky now
-        if not self.terms.hasconstraint:
+        if not self._terms.hasconstraint:
             E = self._cholesky(S + P, sparse=False, verbose=self.verbose)
 
         for _ in range(self.max_iter):
             # recompute cholesky if needed
-            if self.terms.hasconstraint:
+            if self._terms.hasconstraint:
                 P = self._P()
                 C = self._C()
                 E = self._cholesky(S + P + C, sparse=False, verbose=self.verbose)
@@ -1238,7 +1239,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             raise AttributeError("GAM has not been fitted. Call fit first.")
 
         p_values = []
-        for term_i in range(len(self.terms)):
+        for term_i in range(len(self._terms)):
             p_values.append(self._compute_p_value(term_i))
 
         return p_values
@@ -1277,12 +1278,12 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         if not self._is_fitted:
             raise AttributeError("GAM has not been fitted. Call fit first.")
 
-        idxs = self.terms.get_coef_indices(term_i)
+        idxs = self._terms.get_coef_indices(term_i)
         cov = self.statistics_["cov"][idxs][:, idxs]
         coef = self.coef_[idxs]
 
         # center non-intercept term functions
-        if isinstance(self.terms[term_i], SplineTerm):
+        if isinstance(self._terms[term_i], SplineTerm):
             coef -= coef.mean()
 
         inv_cov, rank = sp.linalg.pinv(cov, return_rank=True)
@@ -1401,7 +1402,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         if lp is None:
             lp = self._linear_predictor(modelmat=modelmat, term=term)
 
-        idxs = self.terms.get_coef_indices(term)
+        idxs = self._terms.get_coef_indices(term)
         cov = self.statistics_["cov"][idxs][:, idxs]
 
         var = (modelmat.dot(cov) * modelmat.toarray()).sum(axis=1)
@@ -1429,10 +1430,10 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         """Flatten the mesh and distribute into a feature matrix."""
         n = Xs[0].size
 
-        if self.terms[term].istensor:
-            terms = self.terms[term]
+        if self._terms[term].istensor:
+            terms = self._terms[term]
         else:
-            terms = [self.terms[term]]
+            terms = [self._terms[term]]
 
         X = np.zeros((n, self.statistics_["m_features"]))
         for term_, x in zip(terms, Xs):
@@ -1484,13 +1485,13 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             raise AttributeError("GAM has not been fitted. Call fit first.")
 
         # cant do Intercept
-        if self.terms[term].isintercept:
+        if self._terms[term].isintercept:
             raise ValueError("cannot create grid for intercept term")
 
         # process each subterm in a TensorTerm
-        if self.terms[term].istensor:
+        if self._terms[term].istensor:
             Xs = []
-            for term_ in self.terms[term]:
+            for term_ in self._terms[term]:
                 Xs.append(
                     np.linspace(term_.edge_knots_[0], term_.edge_knots_[1], num=n)
                 )
@@ -1502,9 +1503,11 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
                 return self._flatten_mesh(Xs, term=term)
 
         # all other Terms
-        elif hasattr(self.terms[term], "edge_knots_"):
+        elif hasattr(self._terms[term], "edge_knots_"):
             x = np.linspace(
-                self.terms[term].edge_knots_[0], self.terms[term].edge_knots_[1], num=n
+                self._terms[term].edge_knots_[0],
+                self._terms[term].edge_knots_[1],
+                num=n,
             )
 
             if meshgrid:
@@ -1512,15 +1515,15 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
 
             # fill in feature matrix with only relevant features for this term
             X = np.zeros((n, self.statistics_["m_features"]))
-            X[:, self.terms[term].feature] = x
-            if getattr(self.terms[term], "by", None) is not None:
-                X[:, self.terms[term].by] = 1.0
+            X[:, self._terms[term].feature] = x
+            if getattr(self._terms[term], "by", None) is not None:
+                X[:, self._terms[term].by] = 1.0
 
             return X
 
         # don't know what to do here
         else:
-            raise TypeError(f"Unexpected term type: {self.terms[term]}")
+            raise TypeError(f"Unexpected term type: {self._terms[term]}")
 
     def partial_dependence(
         self, term, X=None, width=None, quantiles=None, meshgrid=False
@@ -1587,13 +1590,13 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             raise ValueError(f"term must be an integer, but found term: {term}")
 
         # ensure term exists
-        if (term >= len(self.terms)) or (term < -1):
+        if (term >= len(self._terms)) or (term < -1):
             raise ValueError(
-                f"Term {term} out of range for model with {len(self.terms)} terms"
+                f"Term {term} out of range for model with {len(self._terms)} terms"
             )
 
         # cant do Intercept
-        if self.terms[term].isintercept:
+        if self._terms[term].isintercept:
             raise ValueError("cannot create grid for intercept term")
 
         if X is None:
@@ -1754,11 +1757,11 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         # term summary
         data = []
 
-        for i, term in enumerate(self.terms):
+        for i, term in enumerate(self._terms):
             # TODO bug: if the number of samples is less than the number of coefficients
             # we cant get the edof per term
             if len(self.statistics_["edof_per_coef"]) == len(self.coef_):
-                idx = self.terms.get_coef_indices(i)
+                idx = self._terms.get_coef_indices(i)
                 edof = np.round(self.statistics_["edof_per_coef"][idx].sum(), 1)
             else:
                 edof = ""

@@ -224,10 +224,10 @@ def test_dummy_encoding(wage_X_y, wage_gam):
     gam = LinearGAM(s(0) + s(1) + f(2, coding="dummy")).fit(X, y)
 
     assert gam._modelmat(X=X, term=2).shape[1] == 4
-    assert gam.terms[2].n_coefs == 4
+    assert gam._terms[2].n_coefs == 4
 
     assert wage_gam._modelmat(X=X, term=2).shape[1] == 5
-    assert wage_gam.terms[2].n_coefs == 5
+    assert wage_gam._terms[2].n_coefs == 5
 
 
 def test_build_cyclic_p_spline(hepatitis_X_y):
@@ -299,7 +299,7 @@ def test_tensor_terms_have_constraints(toy_interaction_X_y):
     gam = LinearGAM(te(0, 1, constraints="none")).fit(X, y)
 
     assert gam._is_fitted
-    assert gam.terms.hasconstraint
+    assert gam._terms.hasconstraint
 
 
 def test_tensor_composite_constraints_equal_penalties():
