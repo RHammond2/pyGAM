@@ -226,7 +226,8 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         return hasattr(self, "coef_")
 
     def _validate_params(self):
-        """Method to sanitize model parameters.
+        """Method to sanitize model parameters. Converts input params to their required model form as
+        dunder params, e.g., :py:attr:`_distribution`, :py:attr:`_link`, and :py:attr:`_callbacks`.
 
         Parameters
         ----------
@@ -260,31 +261,27 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         )
 
         # distribution
-        if not (
-            (self.distribution in DISTRIBUTIONS)
-            or isinstance(self.distribution, Distribution)
-        ):
-            raise ValueError(f"unsupported distribution {self.distribution}")
-        if self.distribution in DISTRIBUTIONS:
-            self.distribution = DISTRIBUTIONS[self.distribution]()
+        is_dist = isinstance(self.distribution, Distribution)
+        if not ((self.distribution in DISTRIBUTIONS) or is_dist):
+            raise ValueError(f"unsupported distribution {self._distribution}")
+        self._distribution = (
+            self.distribution if is_dist else DISTRIBUTIONS[self.distribution]()
+        )
 
         # link
-        if not ((self.link in LINKS) or isinstance(self.link, Link)):
+        is_link = isinstance(self.link, Link)
+        if not ((self.link in LINKS) or is_link):
             raise ValueError(f"unsupported link {self.link}")
-        if self.link in LINKS:
-            self.link = LINKS[self.link]()
+        self._link = self.link if is_link else LINKS[self.link]()
 
         # callbacks
         if not isiterable(self.callbacks):
             raise ValueError(f"Callbacks must be iterable, but found {self.callbacks}")
 
         if not all([c in CALLBACKS or isinstance(c, CallBack) for c in self.callbacks]):
-            raise ValueError(f"unsupported callback(s) {self.callbacks}")
-        callbacks = list(self.callbacks)
-        for i, c in enumerate(self.callbacks):
-            if c in CALLBACKS:
-                callbacks[i] = CALLBACKS[c]()
-        self.callbacks = [validate_callback(c) for c in callbacks]
+            raise ValueError(f"unsupported callback(s) {self._callbacks}")
+        callbacks = [CALLBACKS[c]() if c in CALLBACKS else c for c in self.callbacks]
+        self._callbacks = [validate_callback(c) for c in callbacks]
 
     def _validate_data_dep_params(self, X):
         """Method to validate and prepare data-dependent parameters.
@@ -351,7 +348,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         log-likelihood : np.array of shape (n, )
             containing log-likelihood scores
         """
-        y = check_y(y, self.link, self.distribution, verbose=self.verbose)
+        y = check_y(y, self._link, self._distribution, verbose=self.verbose)
         mu = self.predict_mu(X)
 
         if weights is not None:
@@ -383,7 +380,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         log-likelihood : np.array of shape (n, )
             containing log-likelihood scores
         """
-        return self.distribution.log_pdf(y=y, mu=mu, weights=weights).sum()
+        return self._distribution.log_pdf(y=y, mu=mu, weights=weights).sum()
 
     def _linear_predictor(self, X=None, modelmat=None, b=None, term=-1):
         """Linear predictor
@@ -450,7 +447,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         )
 
         lp = self._linear_predictor(X)
-        return self.link.mu(lp, self.distribution)
+        return self._link.mu(lp, self._distribution)
 
     def predict(self, X):
         """
@@ -598,7 +595,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         -------
         pseudo_data : np.array of shape (n, )
         """
-        return lp + (y - mu) * self.link.gradient(mu, self.distribution)
+        return lp + (y - mu) * self._link.gradient(mu, self._distribution)
 
     def _W(self, mu, weights, y=None):
         """
@@ -632,8 +629,8 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         """
         return sp.sparse.diags(
             (
-                self.link.gradient(mu, self.distribution) ** 2
-                * self.distribution.V(mu=mu)
+                self._link.gradient(mu, self._distribution) ** 2
+                * self._distribution.V(mu=mu)
                 * weights**-1
             )
             ** -0.5
@@ -702,7 +699,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         y[y == 0] += 0.01  # edge case for log link, inverse link, and logit link
         y[y == 1] -= 0.01  # edge case for logit link
 
-        y_ = self.link.link(y, self.distribution)
+        y_ = self._link.link(y, self._distribution)
         y_ = make_2d(y_, verbose=False)
         assert np.isfinite(y_).all(), (
             "transformed response values should be well-behaved."
@@ -767,7 +764,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             # forward pass
             y = deepcopy(Y)  # for simplicity
             lp = self._linear_predictor(modelmat=modelmat)
-            mu = self.link.mu(lp, self.distribution)
+            mu = self._link.mu(lp, self._distribution)
             W = self._W(mu, weights, y)  # create pirls weight matrix
 
             # check for weights == 0, nan, and update
@@ -839,7 +836,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         -------
         None
         """
-        for callback in self.callbacks:
+        for callback in self._callbacks:
             if hasattr(callback, "on_loop_start"):
                 self.logs_[str(callback)].append(callback.on_loop_start(**variables))
 
@@ -857,7 +854,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         -------
         None
         """
-        for callback in self.callbacks:
+        for callback in self._callbacks:
             if hasattr(callback, "on_loop_end"):
                 self.logs_[str(callback)].append(callback.on_loop_end(**variables))
 
@@ -886,7 +883,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         self._validate_params()
 
         # validate data
-        y = check_y(y, self.link, self.distribution, verbose=self.verbose)
+        y = check_y(y, self._link, self._distribution, verbose=self.verbose)
         X = check_X(X, verbose=self.verbose)
         check_X_y(X, y)
 
@@ -969,7 +966,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         if not self._is_fitted:
             raise AttributeError("GAM has not been fitted. Call fit first.")
 
-        y = check_y(y, self.link, self.distribution, verbose=self.verbose)
+        y = check_y(y, self._link, self._distribution, verbose=self.verbose)
         X = check_X(
             X,
             n_feats=self.statistics_["m_features"],
@@ -993,7 +990,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         sign = np.sign(y - mu)
         return (
             sign
-            * self.distribution.deviance(y, mu, weights=weights, scaled=scaled) ** 0.5
+            * self._distribution.deviance(y, mu, weights=weights, scaled=scaled) ** 0.5
         )
 
     def _estimate_model_statistics(
@@ -1035,19 +1032,19 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         None
         """
         lp = self._linear_predictor(modelmat=modelmat)
-        mu = self.link.mu(lp, self.distribution)
+        mu = self._link.mu(lp, self._distribution)
         self.statistics_["edof_per_coef"] = np.diagonal(U1.dot(U1.T))
         self.statistics_["edof"] = self.statistics_["edof_per_coef"].sum()
-        if not self.distribution._known_scale:
-            self.distribution.scale = (
-                self.distribution.phi(
+        if not self._distribution._known_scale:
+            self._distribution.scale = (
+                self._distribution.phi(
                     y=y, mu=mu, edof=self.statistics_["edof"], weights=weights
                 )
                 ** 0.5
             )
-        self.statistics_["scale"] = self.distribution.scale
+        self.statistics_["scale"] = self._distribution.scale
         self.statistics_["cov"] = (
-            (B.dot(B.T)) * self.distribution.scale** 2
+            (B.dot(B.T)) * self._distribution.scale** 2
         )  # parameter covariances. no need to remove a W because we are using W^2. Wood pg 184  # noqa: E501
         self.statistics_["se"] = self.statistics_["cov"].diagonal() ** 0.5
         self.statistics_["AIC"] = self._estimate_AIC(y=y, mu=mu, weights=weights)
@@ -1057,7 +1054,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             modelmat=modelmat, y=y, weights=weights
         )
         self.statistics_["loglikelihood"] = self._loglikelihood(y, mu, weights=weights)
-        self.statistics_["deviance"] = self.distribution.deviance(
+        self.statistics_["deviance"] = self._distribution.deviance(
             y=y, mu=mu, weights=weights
         ).sum()
         self.statistics_["p_values"] = self._estimate_p_values()
@@ -1081,7 +1078,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         None
         """
         estimated_scale = not (
-            self.distribution._known_scale
+            self._distribution._known_scale
         )  # if we estimate the scale, that adds 2 dof
         return (
             -2 * self._loglikelihood(y=y, mu=mu, weights=weights)
@@ -1146,8 +1143,8 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
 
         null_mu = y.mean() * np.ones_like(y).astype("float64")
 
-        null_d = self.distribution.deviance(y=y, mu=null_mu, weights=weights)
-        full_d = self.distribution.deviance(y=y, mu=mu, weights=weights)
+        null_d = self._distribution.deviance(y=y, mu=null_mu, weights=weights)
+        full_d = self._distribution.deviance(y=y, mu=mu, weights=weights)
 
         null_ll = self._loglikelihood(y=y, mu=null_mu, weights=weights)
         full_ll = self._loglikelihood(y=y, mu=mu, weights=weights)
@@ -1211,20 +1208,20 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             weights = np.ones_like(y).astype("float64")
 
         lp = self._linear_predictor(modelmat=modelmat)
-        mu = self.link.mu(lp, self.distribution)
+        mu = self._link.mu(lp, self._distribution)
         n = y.shape[0]
         edof = self.statistics_["edof"]
 
         GCV = None
         UBRE = None
 
-        dev = self.distribution.deviance(
+        dev = self._distribution.deviance(
             mu=mu, y=y, scaled=False, weights=weights
         ).sum()
 
-        if self.distribution._known_scale:
+        if self._distribution._known_scale:
             # scale is known, use UBRE
-            scale = self.distribution.scale
+            scale = self._distribution.scale
             UBRE = (
                 1.0 / n * dev - (~add_scale) * (scale) + 2.0 * gamma / n * edof * scale
             )
@@ -1290,7 +1287,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         score = coef.T.dot(inv_cov).dot(coef)
 
         # compute p-values
-        if self.distribution._known_scale:
+        if self._distribution._known_scale:
             # for known scale use chi-squared statistic
             return 1 - sp.stats.chi2.cdf(x=score, df=rank)
         else:
@@ -1407,11 +1404,11 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
 
         var = (modelmat.dot(cov) * modelmat.toarray()).sum(axis=1)
         if prediction:
-            var += self.distribution.scale**2
+            var += self._distribution.scale**2
 
         lines = []
         for quantile in quantiles:
-            if self.distribution._known_scale:
+            if self._distribution._known_scale:
                 q = sp.stats.norm.ppf(quantile)
             else:
                 q = sp.stats.t.ppf(
@@ -1423,7 +1420,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         lines = np.vstack(lines).T
 
         if xform:
-            lines = self.link.mu(lines, self.distribution)
+            lines = self._link.mu(lines, self._distribution)
         return lines
 
     def _flatten_mesh(self, Xs, term):
@@ -1671,13 +1668,13 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
 
         model_details = []
 
-        objective = "UBRE" if self.distribution._known_scale else "GCV"
+        objective = "UBRE" if self._distribution._known_scale else "GCV"
 
         model_details.append(
             {
                 "model_details": space_row(
                     "Distribution:",
-                    self.distribution.__class__.__name__,
+                    self._distribution.__class__.__name__,
                     total_width=width_details,
                 ),
                 "model_results": space_row(
@@ -1691,7 +1688,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             {
                 "model_details": space_row(
                     "Link Function:",
-                    self.link.__class__.__name__,
+                    self._link.__class__.__name__,
                     total_width=width_details,
                 ),
                 "model_results": space_row(
@@ -1931,7 +1928,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
         if not self._is_fitted:
             self._validate_params()
 
-        y = check_y(y, self.link, self.distribution, verbose=self.verbose)
+        y = check_y(y, self._link, self._distribution, verbose=self.verbose)
         X = check_X(X, verbose=self.verbose)
         check_X_y(X, y)
 
@@ -1957,7 +1954,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             )
 
         # check objective
-        if self.distribution._known_scale:
+        if self._distribution._known_scale:
             if objective == "GCV":
                 raise ValueError("GCV should be used for models withunknown scale")
             if objective == "auto":
@@ -2218,13 +2215,13 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
             sample_at_X = X
 
         linear_predictor = self._modelmat(sample_at_X).dot(coef_draws.T)
-        mu_shape_n_draws_by_n_samples = self.link.mu(
-            linear_predictor, self.distribution
+        mu_shape_n_draws_by_n_samples = self._link.mu(
+            linear_predictor, self._distribution
         ).T
         if quantity == "mu":
             return mu_shape_n_draws_by_n_samples
         else:
-            return self.distribution.sample(mu_shape_n_draws_by_n_samples)
+            return self._distribution.sample(mu_shape_n_draws_by_n_samples)
 
     def _sample_coef(
         self, X, y, weights=None, n_draws=100, n_bootstraps=1, objective="auto"
@@ -2308,7 +2305,7 @@ class GAM(Core, MetaTermMixin, BaseEstimator):
 
         for _ in range(n_bootstraps - 1):  # Wood pg. 198 step 2
             # generate response data from fitted model (Wood pg. 198 step 3)
-            y_bootstrap = self.distribution.sample(mu)
+            y_bootstrap = self._distribution.sample(mu)
 
             # fit smoothing parameters on the bootstrap data
             # (Wood pg. 198 step 4)
@@ -2479,7 +2476,7 @@ class LinearGAM(RegressorMixin, GAM):
         -------
         None
         """
-        self.distribution = NormalDist(scale=self.scale)
+        self._distribution = NormalDist(scale=self.scale)
         super(LinearGAM, self)._validate_params()
 
     def prediction_intervals(self, X, width=0.95, quantiles=None):
@@ -2624,7 +2621,7 @@ class LogisticGAM(ClassifierMixin, GAM):
         if not self._is_fitted:
             raise AttributeError("GAM has not been fitted. Call fit first.")
 
-        y = check_y(y, self.link, self.distribution, verbose=self.verbose)
+        y = check_y(y, self._link, self._distribution, verbose=self.verbose)
         if X is not None:
             X = check_X(
                 X,
@@ -2805,7 +2802,7 @@ class PoissonGAM(RegressorMixin, GAM):
         if rescale_y:
             y = np.round(y * weights).astype("int")
 
-        return self.distribution.log_pdf(y=y, mu=mu, weights=weights).sum()
+        return self._distribution.log_pdf(y=y, mu=mu, weights=weights).sum()
 
     def loglikelihood(self, X, y, exposure=None, weights=None):
         """
@@ -2828,7 +2825,7 @@ class PoissonGAM(RegressorMixin, GAM):
         log-likelihood : np.array of shape (n, )
             containing log-likelihood scores
         """
-        y = check_y(y, self.link, self.distribution, verbose=self.verbose)
+        y = check_y(y, self._link, self._distribution, verbose=self.verbose)
         mu = self.predict_mu(X)
 
         if weights is not None:
@@ -3169,7 +3166,7 @@ class GammaGAM(RegressorMixin, GAM):
         -------
         None
         """
-        self.distribution = GammaDist(scale=self.scale)
+        self._distribution = GammaDist(scale=self.scale)
         super(GammaGAM, self)._validate_params()
 
 
@@ -3288,7 +3285,7 @@ class InvGaussGAM(RegressorMixin, GAM):
         -------
         None
         """
-        self.distribution = InvGaussDist(scale=self.scale)
+        self._distribution = InvGaussDist(scale=self.scale)
         super(InvGaussGAM, self)._validate_params()
 
 
@@ -3421,7 +3418,7 @@ class ExpectileGAM(RegressorMixin, GAM):
         """
         if self.expectile >= 1 or self.expectile <= 0:
             raise ValueError(f"expectile must be in (0,1), but found {self.expectile}")
-        self.distribution = NormalDist(scale=self.scale)
+        self._distribution = NormalDist(scale=self.scale)
         super(ExpectileGAM, self)._validate_params()
 
     def _W(self, mu, weights, y=None):
@@ -3459,8 +3456,8 @@ class ExpectileGAM(RegressorMixin, GAM):
 
         return sp.sparse.diags(
             (
-                self.link.gradient(mu, self.distribution) ** 2
-                * self.distribution.V(mu=mu)
+                self._link.gradient(mu, self._distribution) ** 2
+                * self._distribution.V(mu=mu)
                 * weights**-1
             )
             ** -0.5

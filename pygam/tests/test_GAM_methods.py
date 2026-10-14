@@ -612,7 +612,7 @@ class TestRegressions:
             r = y - Y_out
             scale = np.sqrt(np.mean(r**2))
 
-            return scale, gam.distribution.scale
+            return scale, gam._distribution.scale
 
         # repeat 10 times
         scales_manual, scales_gam = [], []
