@@ -9,6 +9,7 @@ objects (i.e. estimators, displays, functions) from the ``pygam`` package.
 
 import inspect
 import pkgutil
+import sys
 from importlib import import_module
 from operator import itemgetter
 from pathlib import Path
@@ -24,6 +25,10 @@ from sklearn.utils._testing import ignore_warnings
 
 _MODULE_TO_IGNORE = {"tests"}
 ROOT = Path(__file__).parents[2]
+
+# pkgutil does not fully support Path objects until 3.11
+if int(sys.version.split(".")[1]) < 11:
+    ROOT = str(ROOT)
 
 
 def all_estimators(type_filter=None):
